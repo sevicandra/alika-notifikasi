@@ -4,5 +4,6 @@ import { authenticate } from "@/middlewares/auth.middleware";
 const router = Router();
 
 router.post("/Send", authenticate(["webpush.notification.process"]), sendNotification);
-router.post("/broadcast", authenticate(["webpush.broadcast.process"]), sendNotification);
+router.post("/SendBulk", authenticate(["webpush.notification.process"]), sendNotification);
+router.post("/Broadcast", authenticate(["webpush.broadcast.process"]), sendNotification);
 export default router;
