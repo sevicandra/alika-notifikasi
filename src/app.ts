@@ -4,9 +4,11 @@ import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import logger from "morgan";
 import redisClient from "@/config/redis.config";
-import './register-alias';
+import "./register-alias";
 import router from "./routes/index";
 import path from "path";
+import cron from "node-cron";
+import PendingNotification from "@/models/PendingNotification";
 
 dotenv.config();
 const port = process.env.APP_PORT || 3000;
@@ -24,6 +26,13 @@ app.use("/", router);
 
 app.listen(port, () => {
   console.log(`Server is up on port ${port}`);
+});
+
+cron.schedule("0 * * * * *", async () => {
+  console.log("Running cron job");
+  await PendingNotification.scope("expired").destroy();
+  console.log("Cron job finished");
+  
 });
 
 export default app;

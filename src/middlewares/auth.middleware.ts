@@ -28,8 +28,6 @@ export function authenticate(requiredScopes?: string[]) {
           issuer: process.env.ALIKA_AUTH_ISSUER,
         }
       );
-      console.log(decoded);
-      
       const userData = omit(decoded, [
         "scope",
         "account",
