@@ -6,6 +6,9 @@ dotenv.config();
 export const redisConfig = {
   host: process.env.REDIS_HOST || "localhost",
   port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT) : 6379,
+  username: process.env.REDIS_USERNAME_FILE
+    ? fs.readFileSync(process.env.REDIS_USERNAME_FILE, "utf8").trim()
+    : process.env.REDIS_USERNAME || "",
   password: process.env.REDIS_PASSWORD_FILE
     ? fs.readFileSync(process.env.REDIS_PASSWORD_FILE, "utf8").trim()
     : process.env.REDIS_PASSWORD || undefined,
@@ -18,12 +21,12 @@ export const redisConfig = {
 };
 const client = createClient({
   url: `redis://${redisConfig.host}:${redisConfig.port}`,
+  username: redisConfig.username,
   password: redisConfig.password,
   database: redisConfig.db,
   socket: {
     tls: redisConfig.tls,
     connectTimeout: redisConfig.connectTimeout,
-    
   },
 });
 
