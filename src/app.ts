@@ -22,6 +22,10 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static(publicPath));
 
+app.get("/health", (_req: express.Request, res: express.Response) => {
+  res.status(200).json({ status: "OK", timestamp: new Date() });
+});
+
 app.use("/", router);
 
 app.listen(port, () => {
