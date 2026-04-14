@@ -9,6 +9,7 @@ import router from "./routes/index";
 import path from "path";
 import cron from "node-cron";
 import PendingNotification from "@/models/PendingNotification";
+import sequelize from "@/config/db.config";
 
 dotenv.config();
 const port = process.env.APP_PORT || 3000;
@@ -22,8 +23,28 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static(publicPath));
 
-app.get("/health", (_req: express.Request, res: express.Response) => {
-  res.status(200).json({ status: "OK", timestamp: new Date() });
+app.get("/health", async (_req: express.Request, res: express.Response) => {
+  const health: any = { status: "OK", timestamp: new Date() };
+
+  try {
+    await sequelize.authenticate();
+    health.database = "Connected";
+  } catch (error) {
+    health.database = "Disconnected";
+    health.status = "ERROR";
+    console.error("Failed to connect to database", { error });
+  }
+
+  try {
+    const ping = await redisClient.ping();
+    health.redis = ping === "PONG" ? "Connected" : "Disconnected";
+  } catch (error) {
+    health.redis = "Disconnected";
+    health.status = "ERROR";
+    console.error("Failed to connect to redis", { error });
+  }
+
+  res.status(health.status === "OK" ? 200 : 503).json(health);
 });
 
 app.use("/", router);
@@ -36,7 +57,6 @@ cron.schedule("0 * * * * *", async () => {
   console.log("Running cron job");
   await PendingNotification.scope("expired").destroy();
   console.log("Cron job finished");
-  
 });
 
 export default app;
