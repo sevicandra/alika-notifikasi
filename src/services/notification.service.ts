@@ -1,18 +1,24 @@
-import { notificationQueue } from "@/queue/notification.queue";
+import { NotificationQueue } from "@/bullmq/queues/notification";
 
 import { notificationJob } from "@/types/job";
+import { UUID } from "@/utils/uuid.util";
 
 export class NotificationService {
   static addNotification = async (job: notificationJob) => {
     try {
-      await notificationQueue.add("notification", job);
+      await NotificationQueue.addJob("notification", job, UUID.v4(), {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 1000 },
+        removeOnComplete: true,
+        removeOnFail: true,
+      });
     } catch (error) {
       console.error("Error adding notification job:", error);
     }
   };
   static getNotificationQueueCount = async () => {
     try {
-      const queue = await notificationQueue.count();
+      const queue = await NotificationQueue.getJobCounts();
       return queue;
     } catch (error) {
       console.error("Error getting notification queue:", error);
@@ -21,7 +27,7 @@ export class NotificationService {
   };
   static getNotificationQueueCompletedCount = async () => {
     try {
-      const queue = await notificationQueue.getCompletedCount();
+      const queue = await NotificationQueue.getCompletedJobs();
       return queue;
     } catch (error) {
       console.error("Error getting notification queue:", error);
@@ -30,7 +36,7 @@ export class NotificationService {
   };
   static getNotificationQueueFailedCount = async () => {
     try {
-      const queue = await notificationQueue.getFailedCount();
+      const queue = await NotificationQueue.getFailedJobs();
       return queue;
     } catch (error) {
       console.error("Error getting notification queue:", error);
@@ -39,7 +45,7 @@ export class NotificationService {
   };
   static getNotificationQueueDelayedCount = async () => {
     try {
-      const queue = await notificationQueue.getDelayedCount();
+      const queue = await NotificationQueue.getDelayedJobs();
       return queue;
     } catch (error) {
       console.error("Error getting notification queue:", error);
@@ -48,7 +54,7 @@ export class NotificationService {
   };
   static getNotificationQueueWaitingCount = async () => {
     try {
-      const queue = await notificationQueue.getWaitingCount();
+      const queue = await NotificationQueue.getWaitingJobs();
       return queue;
     } catch (error) {
       console.error("Error getting notification queue:", error);

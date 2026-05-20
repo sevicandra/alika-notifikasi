@@ -1,29 +1,30 @@
-import { Router, Response } from "express";
-import {
-  getAllNotificationClients,
-  getNotificationClientByEndpoint,
-  getNotificationClientById,
-  createNotificationClient,
-  updateNotificationClient,
-  deleteNotificationClient,
-  updateNotificationClientByEndpoint,
-  deleteNotificationClientByEndpoint,
-} from "@/controllers/subscription.controller";
-import { authenticate } from "@/middlewares/auth.middleware";
-import { AuthenticatedRequest } from "@/types/auth";
+import { Router, Response, Request } from "express";
+import { SubscriptionController } from "@/controllers/subscription.controller";
+import { authorizeScopes } from "@/middlewares/authenticate.middleware";
 import { webPushConfig } from "@/config/webPush.config";
 import { successResponse } from "@/helpers/respose.helper";
+import { validateBody } from "@/middlewares/validate-request.middleware";
+import z from "zod";
+
+const createSubscriptionSchema = z.object({
+  endpoint: z.string("parameter tidak boleh kosong"),
+  auth: z.string("parameter tidak boleh kosong"),
+  p256dh: z.string("parameter tidak boleh kosong"),
+});
+
+const updateSubscriptionSchema = createSubscriptionSchema.partial();
+
 const router = Router();
 
 router.get(
   "/",
-  authenticate(["webpush.subscribe.read"]),
-  getAllNotificationClients
+  authorizeScopes(["webpush.subscribe.read"]),
+  SubscriptionController.getAllClient
 );
 router.get(
   "/key",
-  authenticate(["webpush.key.read"]),
-  (req: AuthenticatedRequest, res: Response) => {
+  authorizeScopes(["webpush.key.read"]),
+  (req: Request, res: Response) => {
     return successResponse(
       res,
       "Get VAPID key successfully",
@@ -33,39 +34,42 @@ router.get(
 );
 router.get(
   "/endpoint",
-  authenticate(["webpush.subscribe.read"]),
-  getNotificationClientByEndpoint
+  authorizeScopes(["webpush.subscribe.read"]),
+  SubscriptionController.getClientByEndpoint
 );
 router.get(
   "/:id",
-  authenticate(["webpush.subscribe.read"]),
-  getNotificationClientById
+  authorizeScopes(["webpush.subscribe.read"]),
+  SubscriptionController.getClientById
 );
 
 router.post(
   "/",
-  authenticate(["webpush.subscribe.write"]),
-  createNotificationClient
+  authorizeScopes(["webpush.subscribe.write"]),
+  validateBody(createSubscriptionSchema),
+  SubscriptionController.create
 );
 router.patch(
   "/endpoint",
-  authenticate(["webpush.subscribe.update"]),
-  updateNotificationClientByEndpoint
+  authorizeScopes(["webpush.subscribe.update"]),
+  validateBody(updateSubscriptionSchema),
+  SubscriptionController.updateByEndpoint
 );
 router.patch(
   "/:id",
-  authenticate(["webpush.subscribe.update"]),
-  updateNotificationClient
+  authorizeScopes(["webpush.subscribe.update"]),
+  validateBody(updateSubscriptionSchema),
+  SubscriptionController.update
 );
 router.delete(
   "/endpoint",
-  authenticate(["webpush.subscribe.delete"]),
-  deleteNotificationClientByEndpoint
+  authorizeScopes(["webpush.subscribe.delete"]),
+  SubscriptionController.deleteByEndpoint
 );
 router.delete(
   "/:id",
-  authenticate(["webpush.subscribe.delete"]),
-  deleteNotificationClient
+  authorizeScopes(["webpush.subscribe.delete"]),
+  SubscriptionController.delete
 );
 
 

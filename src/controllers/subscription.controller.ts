@@ -1,273 +1,87 @@
-import NotificationClient from "@/models/NotificationClient";
-import { Response } from "express";
-import { errorResponse, successResponse } from "@/helpers/respose.helper";
-import { ValidationError, UniqueConstraintError } from "sequelize";
-import { DatabaseError, ConnectionError } from "sequelize";
-import { AxiosError } from "axios";
-import { AuthenticatedRequest } from "@/types/auth";
-import { NotificationService } from "@/services/notification.service";
-import PendingNotification from "@/models/PendingNotification";
 
-export const getAllNotificationClients = async (
-  req: AuthenticatedRequest,
-  res: Response
-) => {
-  try {
+import { Request, Response } from "express";
+import { asyncHandler } from "@/middlewares/async-handler.middleware";
+import { InvalidRequestError, NotFoundError, InternalServerError, AuthorizationError } from "@/utils/errors";
+import { successResponse } from "@/helpers/respose.helper";
+import { sortBuilder } from "@/helpers/sequelizer.helper";
+import { NotificationClient, PendingNotification } from "@/repositories";
+import { NotificationService } from "@/services/notification.service";
+
+export const SubscriptionController = {
+  getAllClient: asyncHandler(async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string) || undefined;
     const offset = parseInt(req.query.offset as string) || undefined;
-    const nip = req.query.nip || undefined;
-    const where: any = {};
-    if (nip) where.nip = nip;
-    const order: any[] = [];
-    const sortField = (req.query.sortField as string) || "id";
-    const sortOrder = (req.query.sortOrder as string) || "DESC";
-    order.push([sortField, sortOrder.toUpperCase()]);
+    const sort = req.query.sort as string;
+    const order = sortBuilder(sort);
 
-    const clients = await NotificationClient.findAndCountAll({
-      where,
+    const { items: data, pagination } = await NotificationClient.findAllWithPagination({
       limit,
       offset,
       order,
     });
 
-    return successResponse(
-      res,
-      "success get all notification clients",
-      clients.rows,
-      {
-        limit,
-        offset,
-        count: clients.count,
-        totalPages: limit ? Math.ceil(clients.count / limit) : 1,
-      }
-    );
-  } catch (error: unknown) {
-    if (
-      error instanceof ValidationError ||
-      error instanceof UniqueConstraintError
-    ) {
-      const parsedErrors = error.errors.map((err) => ({
-        field: err.path,
-        message: err.message,
-      }));
-      return errorResponse(res, "Validation gagal", parsedErrors, 422);
-    } else if (
-      error instanceof DatabaseError ||
-      error instanceof ConnectionError
-    ) {
-      const parsedErrors = error.message;
-      return errorResponse(res, "Kesalahan pada database", parsedErrors, 500);
-    } else if (error instanceof ConnectionError) {
-      const parsedErrors = { message: "Gagal terhubung ke database" };
-      return errorResponse(res, "Koneksi ke database gagal", parsedErrors, 503);
-    } else if (error instanceof AxiosError) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "isAxiosError" in error &&
-        (error as AxiosError).isAxiosError
-      ) {
-        const axiosError = error as AxiosError;
-        const statusCode = axiosError.response?.status || 500;
-        const message =
-          (axiosError.response?.data as { message?: string })?.message ||
-          axiosError.message ||
-          "Kesalahan pada permintaan eksternal";
-        const details = axiosError.response?.data || null;
-        return errorResponse(res, message, details, statusCode);
-      }
-      return errorResponse(res, "Terjadi kesalahan", null, 500);
-    } else if (error instanceof Error) {
-      const parsedErrors = { message: error.message };
-      return errorResponse(res, "Terjadi kesalahan", parsedErrors, 500);
-    } else {
-      const parsedErrors = { message: "Kesalahan tidak diketahui" };
-      return errorResponse(res, "Terjadi kesalahan", parsedErrors, 500);
-    }
-  }
-};
+    successResponse(res, "Success get all notification clients", data, pagination);
+  }),
 
-export const getNotificationClientById = async (
-  req: AuthenticatedRequest,
-  res: Response
-) => {
-  try {
+  getClientById: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const client = await NotificationClient.findByPk(id);
-    if (!client) {
-      return errorResponse(res, "Notification client not found", null, 404);
-    }
-    return successResponse(res, "success get notification client", client);
-  } catch (error: unknown) {
-    if (
-      error instanceof ValidationError ||
-      error instanceof UniqueConstraintError
-    ) {
-      const parsedErrors = error.errors.map((err) => ({
-        field: err.path,
-        message: err.message,
-      }));
-      return errorResponse(res, "Validation gagal", parsedErrors, 422);
-    } else if (
-      error instanceof DatabaseError ||
-      error instanceof ConnectionError
-    ) {
-      const parsedErrors = error.message;
-      return errorResponse(res, "Kesalahan pada database", parsedErrors, 500);
-    } else if (error instanceof ConnectionError) {
-      const parsedErrors = { message: "Gagal terhubung ke database" };
-      return errorResponse(res, "Koneksi ke database gagal", parsedErrors, 503);
-    } else if (error instanceof AxiosError) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "isAxiosError" in error &&
-        (error as AxiosError).isAxiosError
-      ) {
-        const axiosError = error as AxiosError;
-        const statusCode = axiosError.response?.status || 500;
-        const message =
-          (axiosError.response?.data as { message?: string })?.message ||
-          axiosError.message ||
-          "Kesalahan pada permintaan eksternal";
-        const details = axiosError.response?.data || null;
-        return errorResponse(res, message, details, statusCode);
-      }
-      return errorResponse(res, "Terjadi kesalahan", null, 500);
-    } else if (error instanceof Error) {
-      const parsedErrors = { message: error.message };
-      return errorResponse(res, "Terjadi kesalahan", parsedErrors, 500);
-    } else {
-      const parsedErrors = { message: "Kesalahan tidak diketahui" };
-      return errorResponse(res, "Terjadi kesalahan", parsedErrors, 500);
-    }
-  }
-};
 
-export const getNotificationClientByEndpoint = async (
-  req: AuthenticatedRequest,
-  res: Response
-) => {
-  try {
-    const { endpoint } = req.body;
-    if (!endpoint) {
-      return errorResponse(res, "Endpoint not found", null, 400);
+    if (typeof id !== "string") {
+      throw new InvalidRequestError("Invalid request");
     }
-    const client = await NotificationClient.findOne({
-      where: { endpoint },
-    });
-    if (!client) {
-      return errorResponse(res, "Notification client not found", null, 404);
-    }
-    return successResponse(res, "success get notification client", client);
-  } catch (error: unknown) {
-    if (
-      error instanceof ValidationError ||
-      error instanceof UniqueConstraintError
-    ) {
-      const parsedErrors = error.errors.map((err) => ({
-        field: err.path,
-        message: err.message,
-      }));
-      return errorResponse(res, "Validation gagal", parsedErrors, 422);
-    } else if (
-      error instanceof DatabaseError ||
-      error instanceof ConnectionError
-    ) {
-      const parsedErrors = error.message;
-      return errorResponse(res, "Kesalahan pada database", parsedErrors, 500);
-    } else if (error instanceof ConnectionError) {
-      const parsedErrors = { message: "Gagal terhubung ke database" };
-      return errorResponse(res, "Koneksi ke database gagal", parsedErrors, 503);
-    } else if (error instanceof AxiosError) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "isAxiosError" in error &&
-        (error as AxiosError).isAxiosError
-      ) {
-        const axiosError = error as AxiosError;
-        const statusCode = axiosError.response?.status || 500;
-        const message =
-          (axiosError.response?.data as { message?: string })?.message ||
-          axiosError.message ||
-          "Kesalahan pada permintaan eksternal";
-        const details = axiosError.response?.data || null;
-        return errorResponse(res, message, details, statusCode);
-      }
-      return errorResponse(res, "Terjadi kesalahan", null, 500);
-    } else if (error instanceof Error) {
-      const parsedErrors = { message: error.message };
-      return errorResponse(res, "Terjadi kesalahan", parsedErrors, 500);
-    } else {
-      const parsedErrors = { message: "Kesalahan tidak diketahui" };
-      return errorResponse(res, "Terjadi kesalahan", parsedErrors, 500);
-    }
-  }
-};
 
-export const createNotificationClient = async (
-  req: AuthenticatedRequest,
-  res: Response
-) => {
-  try {
-    const { nip, name } = req.user;
-    if (!nip) {
-      return errorResponse(res, "NIP not found", null, 400);
+    const data = await NotificationClient.findById(id);
+    if (!data) {
+      throw new NotFoundError("Data not found");
+    }
+
+    successResponse(res, "Success get notification client", data);
+  }),
+
+  getClientByEndpoint: asyncHandler(async (req: Request, res: Response) => {
+    const { endpoint } = req.params;
+    if (typeof endpoint !== "string") {
+      throw new InvalidRequestError("Invalid request");
+    }
+    const data = await NotificationClient.findOne({ where: { endpoint } });
+    if (!data) {
+      throw new NotFoundError("Data not found");
+    }
+    successResponse(res, "Success get notification client", data);
+  }),
+
+  create: asyncHandler(async (req: Request, res: Response) => {
+    const t = req.transaction;
+    if (!t) {
+      throw new InternalServerError("Transaction not found");
+    }
+
+    const nip = req.user?.nip;
+    const name = req.user?.name;
+    if (!nip || !name) {
+      throw new AuthorizationError("Pengguna tidak dapat di verifikasi");
     }
     const { endpoint, p256dh, auth } = req.body;
     if (!endpoint || !p256dh || !auth) {
-      return errorResponse(res, "Endpoint or keys not found", null, 400);
+      throw new InvalidRequestError("Invalid request");
     }
-    const client = await NotificationClient.create({
+    const data = await NotificationClient.create({
       nip,
       endpoint,
       p256dh,
       auth,
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    }, {
+      transaction: t
     });
-    if (!client) {
-      return errorResponse(
-        res,
-        "Failed to create notification client",
-        null,
-        500
-      );
-    }
-    const pendingNotification = await PendingNotification.scope(
-      "notExpired"
-    ).findAll({
-      where: {
-        nip: nip,
-      },
-    });
-    if (pendingNotification.length > 0) {
-      for (const notification of pendingNotification) {
-        await NotificationService.addNotification({
-          client: {
-            endpoint: client.endpoint,
-            nip: client.nip,
-            keys: {
-              p256dh: client.p256dh,
-              auth: client.auth,
-            },
-          },
-          payload: {
-            title: notification.title || "Alika DJKN",
-            body: notification.message,
-          },
-          maxAttempts: 3,
-        });
-        await notification.destroy();
-      }
-    }
+
     await NotificationService.addNotification({
       client: {
-        endpoint: client.endpoint,
-        nip: client.nip,
+        endpoint: data.endpoint,
+        nip: data.nip,
         keys: {
-          p256dh: client.p256dh,
-          auth: client.auth,
+          p256dh: data.p256dh,
+          auth: data.auth,
         },
       },
       payload: {
@@ -277,335 +91,215 @@ export const createNotificationClient = async (
       maxAttempts: 3,
     });
 
-    return successResponse(res, "success create notification client", client);
-  } catch (error: unknown) {
-    if (
-      error instanceof ValidationError ||
-      error instanceof UniqueConstraintError
-    ) {
-      const parsedErrors = error.errors.map((err) => ({
-        field: err.path,
-        message: err.message,
-      }));
-      return errorResponse(res, "Validation gagal", parsedErrors, 422);
-    } else if (
-      error instanceof DatabaseError ||
-      error instanceof ConnectionError
-    ) {
-      const parsedErrors = error.message;
-      return errorResponse(res, "Kesalahan pada database", parsedErrors, 500);
-    } else if (error instanceof ConnectionError) {
-      const parsedErrors = { message: "Gagal terhubung ke database" };
-      return errorResponse(res, "Koneksi ke database gagal", parsedErrors, 503);
-    } else if (error instanceof AxiosError) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "isAxiosError" in error &&
-        (error as AxiosError).isAxiosError
-      ) {
-        const axiosError = error as AxiosError;
-        const statusCode = axiosError.response?.status || 500;
-        const message =
-          (axiosError.response?.data as { message?: string })?.message ||
-          axiosError.message ||
-          "Kesalahan pada permintaan eksternal";
-        const details = axiosError.response?.data || null;
-        return errorResponse(res, message, details, statusCode);
-      }
-      return errorResponse(res, "Terjadi kesalahan", null, 500);
-    } else if (error instanceof Error) {
-      const parsedErrors = { message: error.message };
-      return errorResponse(res, "Terjadi kesalahan", parsedErrors, 500);
-    } else {
-      const parsedErrors = { message: "Kesalahan tidak diketahui" };
-      return errorResponse(res, "Terjadi kesalahan", parsedErrors, 500);
-    }
-  }
-};
 
-export const updateNotificationClient = async (
-  req: AuthenticatedRequest,
-  res: Response
-) => {
-  try {
-    const { id } = req.params;
-    const { p256dh, auth, nip } = req.body;
-    const client = await NotificationClient.findByPk(id);
-    if (!client) {
-      return errorResponse(res, "Notification client not found", null, 404);
-    }
-    if (p256dh) client.p256dh = p256dh;
-    if (auth) client.auth = auth;
-    if (nip) client.nip = nip;
-    await client.save();
-    return successResponse(res, "success update notification client", client);
-  } catch (error: unknown) {
-    if (
-      error instanceof ValidationError ||
-      error instanceof UniqueConstraintError
-    ) {
-      const parsedErrors = error.errors.map((err) => ({
-        field: err.path,
-        message: err.message,
-      }));
-      return errorResponse(res, "Validation gagal", parsedErrors, 422);
-    } else if (
-      error instanceof DatabaseError ||
-      error instanceof ConnectionError
-    ) {
-      const parsedErrors = error.message;
-      return errorResponse(res, "Kesalahan pada database", parsedErrors, 500);
-    } else if (error instanceof ConnectionError) {
-      const parsedErrors = { message: "Gagal terhubung ke database" };
-      return errorResponse(res, "Koneksi ke database gagal", parsedErrors, 503);
-    } else if (error instanceof AxiosError) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "isAxiosError" in error &&
-        (error as AxiosError).isAxiosError
-      ) {
-        const axiosError = error as AxiosError;
-        const statusCode = axiosError.response?.status || 500;
-        const message =
-          (axiosError.response?.data as { message?: string })?.message ||
-          axiosError.message ||
-          "Kesalahan pada permintaan eksternal";
-        const details = axiosError.response?.data || null;
-        return errorResponse(res, message, details, statusCode);
-      }
-      return errorResponse(res, "Terjadi kesalahan", null, 500);
-    } else if (error instanceof Error) {
-      const parsedErrors = { message: error.message };
-      return errorResponse(res, "Terjadi kesalahan", parsedErrors, 500);
-    } else {
-      const parsedErrors = { message: "Kesalahan tidak diketahui" };
-      return errorResponse(res, "Terjadi kesalahan", parsedErrors, 500);
-    }
-  }
-};
-
-export const updateNotificationClientByEndpoint = async (
-  req: AuthenticatedRequest,
-  res: Response
-) => {
-  try {
-    const { nip } = req.user;
-    if (!nip) {
-      return errorResponse(res, "NIP not found", null, 400);
-    }
-    const { endpoint } = req.body;
-    if (!endpoint) {
-      return errorResponse(res, "Endpoint not found", null, 400);
-    }
-    const { p256dh, auth } = req.body;
-    const client = await NotificationClient.findOne({
-      where: {
-        endpoint: endpoint,
-      },
-    });
-    if (!client) {
-      return errorResponse(res, "Notification client not found", null, 404);
-    }
-    if (p256dh) client.p256dh = p256dh;
-    if (auth) client.auth = auth;
-    if (nip) client.nip = nip;
-    await client.save();
-    const pendingNotification = await PendingNotification.scope(
-      "notExpired"
-    ).findAll({
+    const pending = await PendingNotification.findAll({
       where: {
         nip: nip,
-      },
+      }
     });
-    if (pendingNotification.length > 0) {
-      for (const notification of pendingNotification) {
+    if (pending.length > 0) {
+      await PendingNotification.delete({
+        where: {
+          nip: nip,
+        },
+      }, t);
+
+      pending.forEach(async (pending) => {
         await NotificationService.addNotification({
           client: {
-            endpoint: client.endpoint,
-            nip: client.nip,
+            endpoint: endpoint,
+            nip: nip,
             keys: {
-              p256dh: client.p256dh,
-              auth: client.auth,
+              p256dh: p256dh,
+              auth: auth,
             },
           },
           payload: {
-            title: notification.title || "Alika DJKN",
-            body: notification.message,
+            title: pending.title || "Alika DJKN",
+            body: `[${new Date().toLocaleDateString("id", {
+              year: "numeric",
+              month: "short",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              timeZone: "Asia/Jakarta",
+            })}] ${pending.message}`,
           },
           maxAttempts: 3,
         });
-        await notification.destroy();
-      }
+      });
     }
 
-    return successResponse(res, "success update notification client", client);
-  } catch (error: unknown) {
-    if (
-      error instanceof ValidationError ||
-      error instanceof UniqueConstraintError
-    ) {
-      const parsedErrors = error.errors.map((err) => ({
-        field: err.path,
-        message: err.message,
-      }));
-      return errorResponse(res, "Validation gagal", parsedErrors, 422);
-    } else if (
-      error instanceof DatabaseError ||
-      error instanceof ConnectionError
-    ) {
-      const parsedErrors = error.message;
-      return errorResponse(res, "Kesalahan pada database", parsedErrors, 500);
-    } else if (error instanceof ConnectionError) {
-      const parsedErrors = { message: "Gagal terhubung ke database" };
-      return errorResponse(res, "Koneksi ke database gagal", parsedErrors, 503);
-    } else if (error instanceof AxiosError) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "isAxiosError" in error &&
-        (error as AxiosError).isAxiosError
-      ) {
-        const axiosError = error as AxiosError;
-        const statusCode = axiosError.response?.status || 500;
-        const message =
-          (axiosError.response?.data as { message?: string })?.message ||
-          axiosError.message ||
-          "Kesalahan pada permintaan eksternal";
-        const details = axiosError.response?.data || null;
-        return errorResponse(res, message, details, statusCode);
-      }
-      return errorResponse(res, "Terjadi kesalahan", null, 500);
-    } else if (error instanceof Error) {
-      const parsedErrors = { message: error.message };
-      return errorResponse(res, "Terjadi kesalahan", parsedErrors, 500);
-    } else {
-      const parsedErrors = { message: "Kesalahan tidak diketahui" };
-      return errorResponse(res, "Terjadi kesalahan", parsedErrors, 500);
-    }
-  }
-};
+    successResponse(res, "Success create notification client", data);
+  }, {
+    useTransaction: true
+  }),
 
-export const deleteNotificationClient = async (
-  req: AuthenticatedRequest,
-  res: Response
-) => {
-  try {
+  update: asyncHandler(async (req: Request, res: Response) => {
+    const t = req.transaction;
+    if (!t) {
+      throw new InternalServerError("Transaction not found");
+    }
+
+    const nip = req.user?.nip;
+    if (!nip) {
+      throw new AuthorizationError("Pengguna tidak dapat di verifikasi");
+    }
     const { id } = req.params;
-    const client = await NotificationClient.findByPk(id);
-    if (!client) {
-      return errorResponse(res, "Notification client not found", null, 404);
+    if (typeof id !== "string") {
+      throw new InvalidRequestError("Invalid request");
     }
-    await client.destroy();
-    return successResponse(res, "success delete notification client", client);
-  } catch (error: unknown) {
-    if (
-      error instanceof ValidationError ||
-      error instanceof UniqueConstraintError
-    ) {
-      const parsedErrors = error.errors.map((err) => ({
-        field: err.path,
-        message: err.message,
-      }));
-      return errorResponse(res, "Validation gagal", parsedErrors, 422);
-    } else if (
-      error instanceof DatabaseError ||
-      error instanceof ConnectionError
-    ) {
-      const parsedErrors = error.message;
-      return errorResponse(res, "Kesalahan pada database", parsedErrors, 500);
-    } else if (error instanceof ConnectionError) {
-      const parsedErrors = { message: "Gagal terhubung ke database" };
-      return errorResponse(res, "Koneksi ke database gagal", parsedErrors, 503);
-    } else if (error instanceof AxiosError) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "isAxiosError" in error &&
-        (error as AxiosError).isAxiosError
-      ) {
-        const axiosError = error as AxiosError;
-        const statusCode = axiosError.response?.status || 500;
-        const message =
-          (axiosError.response?.data as { message?: string })?.message ||
-          axiosError.message ||
-          "Kesalahan pada permintaan eksternal";
-        const details = axiosError.response?.data || null;
-        return errorResponse(res, message, details, statusCode);
-      }
-      return errorResponse(res, "Terjadi kesalahan", null, 500);
-    } else if (error instanceof Error) {
-      const parsedErrors = { message: error.message };
-      return errorResponse(res, "Terjadi kesalahan", parsedErrors, 500);
-    } else {
-      const parsedErrors = { message: "Kesalahan tidak diketahui" };
-      return errorResponse(res, "Terjadi kesalahan", parsedErrors, 500);
+    const { p256dh, auth } = req.body;
+    if (!p256dh || !auth) {
+      throw new InvalidRequestError("Invalid request");
     }
-  }
-};
+    const data = await NotificationClient.updateById(id, {
+      nip: req.user?.nip,
+      p256dh,
+      auth,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    }, t);
 
-export const deleteNotificationClientByEndpoint = async (
-  req: AuthenticatedRequest,
-  res: Response
-) => {
-  try {
-    const { endpoint } = req.body;
-    if (!endpoint) {
-      return errorResponse(res, "Endpoint not found", null, 400);
+    const pending = await PendingNotification.findAll({
+      where: {
+        nip: nip,
+      }
+    });
+    if (pending.length > 0) {
+      await PendingNotification.delete({
+        where: {
+          nip: nip,
+        },
+      }, t);
+
+      pending.forEach(async (pending) => {
+        await NotificationService.addNotification({
+          client: {
+            endpoint: data.endpoint,
+            nip: nip,
+            keys: {
+              p256dh: p256dh,
+              auth: auth,
+            },
+          },
+          payload: {
+            title: pending.title || "Alika DJKN",
+            body: `[${new Date().toLocaleDateString("id", {
+              year: "numeric",
+              month: "short",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              timeZone: "Asia/Jakarta",
+            })}] ${pending.message}`,
+          },
+          maxAttempts: 3,
+        });
+      });
     }
-    const client = await NotificationClient.findOne({
+    successResponse(res, "Success update notification client", data);
+  }, {
+    useTransaction: true
+  }),
+
+  updateByEndpoint: asyncHandler(async (req: Request, res: Response) => {
+    const t = req.transaction;
+    if (!t) {
+      throw new InternalServerError("Transaction not found");
+    }
+
+    const nip = req.user?.nip;
+    if (!nip) {
+      throw new AuthorizationError("Pengguna tidak dapat di verifikasi");
+    }
+
+    const { endpoint } = req.body;
+    if (typeof endpoint !== "string") {
+      throw new InvalidRequestError("Invalid request");
+    }
+    const { p256dh, auth } = req.body;
+    const data = await NotificationClient.updateOne({
       where: {
         endpoint: endpoint,
-      },
-    });
-    if (!client) {
-      return errorResponse(res, "Notification client not found", null, 404);
-    }
-    await client.destroy();
-    return successResponse(res, "success delete notification client", client);
-  } catch (error: unknown) {
-    if (
-      error instanceof ValidationError ||
-      error instanceof UniqueConstraintError
-    ) {
-      const parsedErrors = error.errors.map((err) => ({
-        field: err.path,
-        message: err.message,
-      }));
-      return errorResponse(res, "Validation gagal", parsedErrors, 422);
-    } else if (
-      error instanceof DatabaseError ||
-      error instanceof ConnectionError
-    ) {
-      const parsedErrors = error.message;
-      return errorResponse(res, "Kesalahan pada database", parsedErrors, 500);
-    } else if (error instanceof ConnectionError) {
-      const parsedErrors = { message: "Gagal terhubung ke database" };
-      return errorResponse(res, "Koneksi ke database gagal", parsedErrors, 503);
-    } else if (error instanceof AxiosError) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "isAxiosError" in error &&
-        (error as AxiosError).isAxiosError
-      ) {
-        const axiosError = error as AxiosError;
-        const statusCode = axiosError.response?.status || 500;
-        const message =
-          (axiosError.response?.data as { message?: string })?.message ||
-          axiosError.message ||
-          "Kesalahan pada permintaan eksternal";
-        const details = axiosError.response?.data || null;
-        return errorResponse(res, message, details, statusCode);
       }
-      return errorResponse(res, "Terjadi kesalahan", null, 500);
-    } else if (error instanceof Error) {
-      const parsedErrors = { message: error.message };
-      return errorResponse(res, "Terjadi kesalahan", parsedErrors, 500);
-    } else {
-      const parsedErrors = { message: "Kesalahan tidak diketahui" };
-      return errorResponse(res, "Terjadi kesalahan", parsedErrors, 500);
+    }, {
+      nip: nip,
+    }, t);
+
+    const pending = await PendingNotification.findAll({
+      where: {
+        nip: nip,
+      }
+    });
+    if (pending.length > 0) {
+      await PendingNotification.delete({
+        where: {
+          nip: nip,
+        },
+      }, t);
+
+      pending.forEach(async (pending) => {
+        await NotificationService.addNotification({
+          client: {
+            endpoint: data.endpoint,
+            nip: nip,
+            keys: {
+              p256dh: p256dh,
+              auth: auth,
+            },
+          },
+          payload: {
+            title: pending.title || "Alika DJKN",
+            body: `[${new Date().toLocaleDateString("id", {
+              year: "numeric",
+              month: "short",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              timeZone: "Asia/Jakarta",
+            })}] ${pending.message}`,
+          },
+          maxAttempts: 3,
+        });
+      });
     }
-  }
-};
+
+    successResponse(res, "Success update notification client", data);
+  }, {
+    useTransaction: true
+  }),
+
+  delete: asyncHandler(async (req: Request, res: Response) => {
+    const t = req.transaction;
+    if (!t) {
+      throw new InternalServerError("Transaction not found");
+    }
+
+
+    const { id } = req.params;
+    if (typeof id !== "string") {
+      throw new InvalidRequestError("Invalid request");
+    }
+    const data = await NotificationClient.deleteById(id, t);
+    successResponse(res, "Success delete notification client", data);
+  }, {
+    useTransaction: true
+  }),
+
+  deleteByEndpoint: asyncHandler(async (req: Request, res: Response) => {
+    const t = req.transaction;
+    if (!t) {
+      throw new InternalServerError("Transaction not found");
+    }
+
+
+    const { endpoint } = req.params;
+    if (typeof endpoint !== "string") {
+      throw new InvalidRequestError("Invalid request");
+    }
+    const data = await NotificationClient.deleteOne({ where: { endpoint } }, t);
+    successResponse(res, "Success delete notification client", data);
+  }, {
+    useTransaction: true
+  })
+}

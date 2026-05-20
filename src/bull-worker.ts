@@ -1,40 +1,26 @@
 import dotenv from "dotenv";
+import { redisService } from "@/services/redis-service";
+import { NotificationWorker } from "@/bullmq/workers/notification";
+import { minioService } from "@/services/minio-service";
 import "./register-alias";
-import { notificationQueue } from "@/queue/notification.queue";
-import NotificationClient from "@/models/NotificationClient";
-import { WebPushError } from "web-push";
-import { sendNotification } from "@/jobs/notification.job";
-import { log } from "console";
+
 dotenv.config();
+const startServer = async () => {
+  await redisService.connect();
+  await minioService.ensureBucketExists();
+  process.on("SIGTERM", () => {
+    Promise.all([
+      NotificationWorker.close(),
+    ]);
+    process.exit(0);
+  });
 
-notificationQueue.process("notification", 5, sendNotification); 
-notificationQueue.on("failed", async (job, err: WebPushError) => {
-  const { client } = job.data;
-  if (err.statusCode === 410 || err.statusCode === 404) {
-    await NotificationClient.destroy({
-      where: { endpoint: client.endpoint },
-    });
-    job.remove();
-  } else if (err.statusCode === 429 && job.attemptsMade < 3) {
-    job.update({
-      attempts: job.attemptsMade + 1,
-      delay: 1000 * Math.pow(2, job.attemptsMade),
-      ...job.data,
-    });
-  } else {
-    job.remove();
-  }
-});
+  process.on("SIGINT", () => {
+    Promise.all([
+      NotificationWorker.close(),
+    ]);
+    process.exit(0);
+  });
+};
 
-notificationQueue.on("completed", async (job) => {
-  job.remove();
-});
-
-notificationQueue.on("progress", async (job) => {
-  log(
-    `Job ${job.id} is ${job.progress()}% complete.`
-  );
-});
-
-log("Bull worker started");
-
+startServer();
