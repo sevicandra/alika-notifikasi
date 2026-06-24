@@ -1,5 +1,5 @@
 import axios from "axios";
-import jwkToPem from "jwk-to-pem";
+import crypto from "crypto";
 import { alikaConfig } from "@/config/alika.config";
 import { appConfig } from "@/config/app.config";
 import { redisService } from "@/services/redis-service";
@@ -27,7 +27,7 @@ export class AlikaService {
           headers: {
             "Content-Type": "application/x-www-form-urlencoded",
           },
-        }
+        },
       );
       this.token = response.data.access_token as string;
       this.tokenExpiration = currentTime + response.data.expires_in;
@@ -58,7 +58,7 @@ export class AlikaService {
           headers: {
             Authorization: `Bearer ${await this.getAccessToken()}`,
           },
-        }
+        },
       );
     } catch (error) {
       console.error("Error sending push notification:", error);
@@ -86,7 +86,7 @@ export class AlikaService {
           headers: {
             Authorization: `Bearer ${await this.getAccessToken()}`,
           },
-        }
+        },
       );
     } catch (error) {
       console.error("Error sending push notification:", error);
@@ -99,9 +99,20 @@ export class AlikaService {
       if (this.publicKey && currentTime < this.publicKeyExpiration) {
         return this.publicKey;
       }
-      const response = await axios.get(`${alikaConfig.BASE_URI}/.well-known/jwks.json`);
+      const response = await axios.get(
+        `${alikaConfig.BASE_URI}/.well-known/jwks.json`,
+      );
       const jwk = response.data.keys[0];
-      const pem = jwkToPem(jwk);
+      const keyObject = crypto.createPublicKey({
+        key: jwk,
+        format: "jwk",
+      });
+      const pem = keyObject
+        .export({
+          type: "spki",
+          format: "pem",
+        })
+        .toString();
       this.publicKey = pem;
       this.publicKeyExpiration = currentTime + 3600;
       return this.publicKey;
@@ -132,9 +143,13 @@ export class AlikaService {
           headers: {
             Authorization: `Bearer ${await this.getAccessToken()}`,
           },
-        }
+        },
       );
-      await redisService.setWithTimeout(`${appConfig.NAME}:Alika:User:SDM`, data.data, 3600);
+      await redisService.setWithTimeout(
+        `${appConfig.NAME}:Alika:User:SDM`,
+        data.data,
+        3600,
+      );
       return data.data as {
         nama: string;
         nip: string;
@@ -166,9 +181,13 @@ export class AlikaService {
           headers: {
             Authorization: `Bearer ${await this.getAccessToken()}`,
           },
-        }
+        },
       );
-      await redisService.setWithTimeout(`${appConfig.NAME}:Alika:User:Keu`, data.data, 3600);
+      await redisService.setWithTimeout(
+        `${appConfig.NAME}:Alika:User:Keu`,
+        data.data,
+        3600,
+      );
       return data.data as {
         nama: string;
         nip: string;
