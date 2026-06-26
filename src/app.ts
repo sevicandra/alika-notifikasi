@@ -21,8 +21,25 @@ import { minioService } from "@/services/minio-service";
 
 const startServer = async () => {
   try {
-    await redisService.connect();
     dotenv.config();
+
+    try {
+      await redisService.connect();
+    } catch (error) {
+      logger.error(
+        "Failed to connect to Redis during startup. App will run without Redis cache.",
+        { error },
+      );
+    }
+
+    try {
+      await minioService.ensureBucketExists();
+    } catch (error) {
+      logger.error(
+        "Failed to initialize MinIO during startup. App will run without functional object storage.",
+        { error },
+      );
+    }
     const port = appConfig.PORT;
     const app = express();
 
