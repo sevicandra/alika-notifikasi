@@ -1,10 +1,10 @@
-import { Router, Response, Request } from "express";
+import { Request, Response, Router } from "express";
+import z from "zod";
 import { SubscriptionController } from "@/controllers/subscription.controller";
 import { authorizeScopes } from "@/middlewares/authenticate.middleware";
+import { validateBody } from "@/middlewares/validate-request.middleware";
 import { webPushConfig } from "@/config/webPush.config";
 import { successResponse } from "@/helpers/respose.helper";
-import { validateBody } from "@/middlewares/validate-request.middleware";
-import z from "zod";
 
 const createSubscriptionSchema = z.object({
   endpoint: z.string("parameter tidak boleh kosong"),
@@ -16,22 +16,10 @@ const updateSubscriptionSchema = createSubscriptionSchema.partial();
 
 const router = Router();
 
-router.get(
-  "/",
-  authorizeScopes(["webpush.subscribe.read"]),
-  SubscriptionController.getAllClient
-);
-router.get(
-  "/key",
-  authorizeScopes(["webpush.key.read"]),
-  (req: Request, res: Response) => {
-    return successResponse(
-      res,
-      "Get VAPID key successfully",
-      webPushConfig.vapidKeys.publicKey
-    );
-  }
-);
+router.get("/", authorizeScopes(["webpush.subscribe.read"]), SubscriptionController.getAllClient);
+router.get("/key", authorizeScopes(["webpush.key.read"]), (_req: Request, res: Response) => {
+  return successResponse(res, "Get VAPID key successfully", webPushConfig.vapidKeys.publicKey);
+});
 router.get(
   "/endpoint",
   authorizeScopes(["webpush.subscribe.read"]),
@@ -66,11 +54,6 @@ router.delete(
   authorizeScopes(["webpush.subscribe.delete"]),
   SubscriptionController.deleteByEndpoint
 );
-router.delete(
-  "/:id",
-  authorizeScopes(["webpush.subscribe.delete"]),
-  SubscriptionController.delete
-);
-
+router.delete("/:id", authorizeScopes(["webpush.subscribe.delete"]), SubscriptionController.delete);
 
 export default router;

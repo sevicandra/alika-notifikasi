@@ -13,10 +13,15 @@ export class RedisService {
       username: redisConfig.username,
       password: redisConfig.password,
       database: redisConfig.db,
-      socket: {
-        rejectUnauthorized: !redisConfig.tls,
-        connectTimeout: redisConfig.connectTimeout,
-      },
+      socket: redisConfig.tls
+        ? {
+            tls: true,
+            rejectUnauthorized: false,
+            connectTimeout: redisConfig.connectTimeout,
+          }
+        : {
+            connectTimeout: redisConfig.connectTimeout,
+          },
     });
     this.setupEventHandlers();
   }
@@ -70,7 +75,7 @@ export class RedisService {
         return null;
       }
 
-      return await JSON.parse(value) as T;
+      return (await JSON.parse(value)) as T;
     } catch (error) {
       if (error instanceof CacheError) throw error;
 
