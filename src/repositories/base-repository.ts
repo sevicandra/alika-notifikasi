@@ -166,7 +166,7 @@ export abstract class BaseRepository<T extends Model> {
     }
   }
 
-  async delete(options: DestroyOptions<T>, t: Transaction): Promise<number> {
+  async delete(options: DestroyOptions<T>, t?: Transaction): Promise<number> {
     try {
       return this.model.destroy({ ...options, transaction: t });
     } catch (error) {
@@ -174,7 +174,7 @@ export abstract class BaseRepository<T extends Model> {
     }
   }
 
-  async deleteOne(options: FindOptions<T>, t: Transaction): Promise<number> {
+  async deleteOne(options: FindOptions<T>, t?: Transaction): Promise<number> {
     try {
       const data = await this.model.findOne(options);
       if (!data) {
@@ -190,7 +190,7 @@ export abstract class BaseRepository<T extends Model> {
     }
   }
 
-  async deleteById(id: Identifier, t: Transaction): Promise<number> {
+  async deleteById(id: Identifier, t?: Transaction): Promise<number> {
     try {
       return this.model.destroy({ transaction: t, where: { id } as any });
     } catch (error) {

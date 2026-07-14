@@ -4,14 +4,19 @@ import webPush from "web-push";
 import { webPushConfig } from "@/config/webPush.config";
 import { notificationJob } from "@/types/job";
 import { appConfig } from "@/config/app.config";
+import { NotificationClient } from "@/repositories";
 
 dotenv.config();
 
-webPush.setVapidDetails(
-    "mailto:" + webPushConfig.email,
-    webPushConfig.vapidKeys.publicKey,
-    webPushConfig.vapidKeys.privateKey
-);
+try {
+    webPush.setVapidDetails(
+        "mailto:" + webPushConfig.email,
+        webPushConfig.vapidKeys.publicKey,
+        webPushConfig.vapidKeys.privateKey
+    );
+} catch (error) {
+    console.error("Failed to set VAPID details for web-push:", error);
+}
 
 export const NotificationWorker = new BaseQueueWorker<notificationJob>("notification", (job) => {
     const { client, payload } = job.data;
@@ -38,8 +43,17 @@ export const NotificationWorker = new BaseQueueWorker<notificationJob>("notifica
                 })
             );
             resolve();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Job gagal, percobaan ke:", job.attemptsMade + 1);
+
+            if (error && (error.statusCode === 410 || error.statusCode === 404)) {
+                console.warn(`Push subscription expired or invalid (status ${error.statusCode}). Deleting client subscription for endpoint: ${client.endpoint}`);
+                try {
+                    await NotificationClient.deleteOne({ where: { endpoint: client.endpoint } });
+                } catch (dbError) {
+                    console.error("Failed to delete expired subscription client from DB:", dbError);
+                }
+            }
 
             if (job.attemptsMade >= 2) {
                 console.log("Job gagal maksimal, status diubah ke failed.");

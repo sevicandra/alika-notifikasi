@@ -14,6 +14,7 @@ export class NotificationService {
       });
     } catch (error) {
       console.error("Error adding notification job:", error);
+      throw error;
     }
   };
   static getNotificationQueueCount = async () => {

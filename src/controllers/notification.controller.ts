@@ -39,43 +39,45 @@ export const NotificationController = {
       });
     }
 
-    client.forEach(async (client) => {
-      const { endpoint, p256dh, auth } = client;
+    await Promise.all(
+      client.map(async (client) => {
+        const { endpoint, p256dh, auth } = client;
 
-      await NotificationService.addNotification({
-        client: {
-          endpoint: endpoint,
-          nip: nip,
-          keys: {
-            p256dh: p256dh,
-            auth: auth,
+        await NotificationService.addNotification({
+          client: {
+            endpoint: endpoint,
+            nip: nip,
+            keys: {
+              p256dh: p256dh,
+              auth: auth,
+            },
           },
-        },
-        payload: {
-          title: title || "Alika DJKN",
-          body: `[${new Date().toLocaleDateString("id", {
-            year: "numeric",
-            month: "short",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-            timeZone: "Asia/Jakarta",
-          })}] ${message}`,
-          actions: [
-            {
-              action: "open",
-              title: "Buka",
-            },
-            {
-              action: "dismiss",
-              title: "Tutup",
-            },
-          ],
-          url: url,
-        },
-        maxAttempts: 3,
-      });
-    });
+          payload: {
+            title: title || "Alika DJKN",
+            body: `[${new Date().toLocaleDateString("id", {
+              year: "numeric",
+              month: "short",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              timeZone: "Asia/Jakarta",
+            })}] ${message}`,
+            actions: [
+              {
+                action: "open",
+                title: "Buka",
+              },
+              {
+                action: "dismiss",
+                title: "Tutup",
+              },
+            ],
+            url: url,
+          },
+          maxAttempts: 3,
+        });
+      })
+    );
 
     successResponse(res, "Success send notification");
   }, { useTransaction: true }),
@@ -116,13 +118,71 @@ export const NotificationController = {
         });
       }
 
-      client.forEach(async (client) => {
-        const { endpoint, p256dh, auth } = client;
+      await Promise.all(
+        client.map(async (client) => {
+          const { endpoint, p256dh, auth } = client;
+
+          await NotificationService.addNotification({
+            client: {
+              endpoint: endpoint,
+              nip: n,
+              keys: {
+                p256dh: p256dh,
+                auth: auth,
+              },
+            },
+            payload: {
+              title: title || "Alika DJKN",
+              body: `[${new Date().toLocaleDateString("id", {
+                year: "numeric",
+                month: "short",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                timeZone: "Asia/Jakarta",
+              })}] ${message}`,
+              actions: [
+                {
+                  action: "open",
+                  title: "Buka",
+                },
+                {
+                  action: "dismiss",
+                  title: "Tutup",
+                },
+              ],
+              url: url,
+            },
+            maxAttempts: 3,
+          });
+        })
+      );
+    }
+
+    successResponse(res, "Success send bulk notification");
+
+  }, { useTransaction: true }),
+
+  broadcast: asyncHandler(async (req: Request, res: Response) => {
+    const t = req.transaction;
+    if (!t) {
+      throw new InternalServerError("Transaction not found");
+    }
+    const { message, title, url } = req.body;
+    if (!message) {
+      throw new InvalidRequestError("Invalid request");
+    }
+
+
+    const client = await NotificationClient.findAll();
+    await Promise.all(
+      client.map(async (client) => {
+        const { endpoint, p256dh, auth, nip } = client;
 
         await NotificationService.addNotification({
           client: {
             endpoint: endpoint,
-            nip: n,
+            nip: nip,
             keys: {
               p256dh: p256dh,
               auth: auth,
@@ -152,62 +212,8 @@ export const NotificationController = {
           },
           maxAttempts: 3,
         });
-      });
-    }
-
-    successResponse(res, "Success send bulk notification");
-
-  }, { useTransaction: true }),
-
-  broadcast: asyncHandler(async (req: Request, res: Response) => {
-    const t = req.transaction;
-    if (!t) {
-      throw new InternalServerError("Transaction not found");
-    }
-    const { message, title, url } = req.body;
-    if (!message) {
-      throw new InvalidRequestError("Invalid request");
-    }
-
-
-    const client = await NotificationClient.findAll();
-    client.forEach(async (client) => {
-      const { endpoint, p256dh, auth, nip } = client;
-
-      await NotificationService.addNotification({
-        client: {
-          endpoint: endpoint,
-          nip: nip,
-          keys: {
-            p256dh: p256dh,
-            auth: auth,
-          },
-        },
-        payload: {
-          title: title || "Alika DJKN",
-          body: `[${new Date().toLocaleDateString("id", {
-            year: "numeric",
-            month: "short",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-            timeZone: "Asia/Jakarta",
-          })}] ${message}`,
-          actions: [
-            {
-              action: "open",
-              title: "Buka",
-            },
-            {
-              action: "dismiss",
-              title: "Tutup",
-            },
-          ],
-          url: url,
-        },
-        maxAttempts: 3,
-      });
-    });
+      })
+    );
 
     successResponse(res, "Success broadcast notification");
   }, { useTransaction: true }),
