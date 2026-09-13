@@ -1,5 +1,5 @@
 # Stage 1: Builder
-FROM node:lts-bullseye AS builder
+FROM node:lts-bookworm AS builder
 
 WORKDIR /app
 
@@ -11,7 +11,7 @@ COPY . .
 
 RUN npm run build
 
-FROM node:lts-bullseye-slim
+FROM node:lts-bookworm-slim
 
 WORKDIR /app
 

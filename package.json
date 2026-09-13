@@ -1,6 +1,6 @@
 {
   "name": "alika-notifikasi",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "main": "app.ts",
   "private": true,
   "scripts": {
